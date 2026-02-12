@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Nav from "@/components/Nav";
+import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
   title: "Řemeslníci",
@@ -15,8 +15,7 @@ export default function RootLayout({
   return (
     <html lang="cs">
       <body style={{ fontFamily: "system-ui, sans-serif", margin: 0 }}>
-        <Nav />
-        <div style={{ padding: 16 }}>{children}</div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

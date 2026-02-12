@@ -1,0 +1,192 @@
+"use client";
+
+/**
+ * Login / Registration page.
+ *
+ * Single page with two modes:
+ * - Login (email + password)
+ * - Register (email + password + confirm password)
+ *
+ * Redirects to /work on successful auth.
+ */
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/supabase/AuthProvider";
+
+type Mode = "login" | "register";
+
+export default function LoginPage() {
+  const { login, register, user, loading } = useAuth();
+  const router = useRouter();
+
+  const [mode, setMode] = useState<Mode>("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Already logged in → redirect
+  if (!loading && user) {
+    router.replace("/work");
+    return null;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setInfo("");
+
+    if (!email.trim() || !password) {
+      setError("Vyplňte e-mail a heslo.");
+      return;
+    }
+
+    if (mode === "register") {
+      if (password.length < 6) {
+        setError("Heslo musí mít alespoň 6 znaků.");
+        return;
+      }
+      if (password !== passwordConfirm) {
+        setError("Hesla se neshodují.");
+        return;
+      }
+    }
+
+    setSubmitting(true);
+
+    if (mode === "login") {
+      const { error: err } = await login(email, password);
+      if (err) {
+        setError(err);
+        setSubmitting(false);
+      } else {
+        router.replace("/work");
+      }
+    } else {
+      const { error: err } = await register(email, password);
+      if (err) {
+        setError(err);
+        setSubmitting(false);
+      } else {
+        setInfo("Registrace úspěšná. Zkontrolujte e-mail pro potvrzení.");
+        setSubmitting(false);
+      }
+    }
+  }
+
+  if (loading) {
+    return <p style={{ padding: 32, textAlign: "center" }}>Načítám…</p>;
+  }
+
+  return (
+    <div
+      style={{
+        maxWidth: 400,
+        margin: "80px auto",
+        padding: 24,
+        border: "1px solid #ddd",
+        borderRadius: 8,
+      }}
+    >
+      <h1 style={{ textAlign: "center", marginBottom: 24 }}>
+        {mode === "login" ? "Přihlášení" : "Registrace"}
+      </h1>
+
+      {error && (
+        <p style={{ color: "red", marginBottom: 12 }}>{error}</p>
+      )}
+      {info && (
+        <p style={{ color: "green", marginBottom: 12 }}>{info}</p>
+      )}
+
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <label>
+          E-mail:
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            required
+            style={{ display: "block", width: "100%", padding: 8, boxSizing: "border-box" }}
+          />
+        </label>
+
+        <label>
+          Heslo:
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
+            required
+            style={{ display: "block", width: "100%", padding: 8, boxSizing: "border-box" }}
+          />
+        </label>
+
+        {mode === "register" && (
+          <label>
+            Heslo znovu:
+            <input
+              type="password"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              autoComplete="new-password"
+              required
+              style={{ display: "block", width: "100%", padding: 8, boxSizing: "border-box" }}
+            />
+          </label>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          style={{ padding: "10px 16px", fontSize: 16, marginTop: 8 }}
+        >
+          {submitting
+            ? "Čekejte…"
+            : mode === "login"
+            ? "Přihlásit se"
+            : "Zaregistrovat se"}
+        </button>
+      </form>
+
+      <p style={{ textAlign: "center", marginTop: 16 }}>
+        {mode === "login" ? (
+          <>
+            Nemáte účet?{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setMode("register");
+                setError("");
+                setInfo("");
+              }}
+              style={{ background: "none", border: "none", color: "blue", cursor: "pointer", textDecoration: "underline" }}
+            >
+              Zaregistrujte se
+            </button>
+          </>
+        ) : (
+          <>
+            Máte účet?{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setMode("login");
+                setError("");
+                setInfo("");
+              }}
+              style={{ background: "none", border: "none", color: "blue", cursor: "pointer", textDecoration: "underline" }}
+            >
+              Přihlaste se
+            </button>
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
