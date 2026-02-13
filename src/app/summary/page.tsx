@@ -120,7 +120,7 @@ export default function SummaryPage() {
   return (
     <div>
       <h1>Měsíční přehled</h1>
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="error-message">{error}</p>}
 
       <label>
         Měsíc:
@@ -128,49 +128,79 @@ export default function SummaryPage() {
           type="month"
           value={month}
           onChange={(e) => setMonth(e.target.value)}
-          style={{ marginLeft: 8 }}
         />
       </label>
 
       {entries.length === 0 ? (
         <p style={{ marginTop: 16 }}>Žádné záznamy pro tento měsíc.</p>
       ) : (
-        <>
-          <table style={{ borderCollapse: "collapse", width: "100%", marginTop: 16 }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: 4 }}>Zakázka</th>
-                <th style={{ textAlign: "right", borderBottom: "1px solid #ccc", padding: 4 }}>Hodiny</th>
-                <th style={{ textAlign: "right", borderBottom: "1px solid #ccc", padding: 4 }}>Km</th>
-                <th style={{ textAlign: "right", borderBottom: "1px solid #ccc", padding: 4 }}>Práce</th>
-                <th style={{ textAlign: "right", borderBottom: "1px solid #ccc", padding: 4 }}>Výdaje</th>
-                <th style={{ textAlign: "right", borderBottom: "1px solid #ccc", padding: 4 }}>Celkem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summaries.map((s) => (
-                <tr key={s.jobId}>
-                  <td style={{ padding: 4 }}>{s.jobName}</td>
-                  <td style={{ padding: 4, textAlign: "right" }}>{s.hours.toFixed(2)}</td>
-                  <td style={{ padding: 4, textAlign: "right" }}>{s.km.toFixed(1)}</td>
-                  <td style={{ padding: 4, textAlign: "right" }}>{s.labor.toFixed(2)} Kč</td>
-                  <td style={{ padding: 4, textAlign: "right" }}>{s.expenses.toFixed(2)} Kč</td>
-                  <td style={{ padding: 4, textAlign: "right" }}>{s.grand.toFixed(2)} Kč</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{ fontWeight: "bold", borderTop: "2px solid #333" }}>
-                <td style={{ padding: 4 }}>Celkem</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{totals.hours.toFixed(2)}</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{totals.km.toFixed(1)}</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{totals.labor.toFixed(2)} Kč</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{totals.expenses.toFixed(2)} Kč</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{totals.grand.toFixed(2)} Kč</td>
-              </tr>
-            </tfoot>
-          </table>
-        </>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+          {summaries.map((s) => (
+            <div
+              key={s.jobId}
+              style={{
+                padding: 12,
+                border: "1px solid #eee",
+                borderRadius: 8,
+              }}
+            >
+              <strong style={{ fontSize: 16 }}>{s.jobName}</strong>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "4px 16px",
+                  marginTop: 8,
+                  fontSize: 14,
+                  color: "#555",
+                }}
+              >
+                <span>Hodiny:</span>
+                <span style={{ textAlign: "right" }}>{s.hours.toFixed(2)}</span>
+                <span>Km:</span>
+                <span style={{ textAlign: "right" }}>{s.km.toFixed(1)}</span>
+                <span>Práce:</span>
+                <span style={{ textAlign: "right" }}>{s.labor.toFixed(0)} Kč</span>
+                <span>Výdaje:</span>
+                <span style={{ textAlign: "right" }}>{s.expenses.toFixed(0)} Kč</span>
+                <span style={{ fontWeight: 600, color: "#111" }}>Celkem:</span>
+                <span style={{ textAlign: "right", fontWeight: 600, color: "#111" }}>{s.grand.toFixed(0)} Kč</span>
+              </div>
+            </div>
+          ))}
+
+          {/* Totals card */}
+          <div
+            style={{
+              padding: 12,
+              border: "2px solid #333",
+              borderRadius: 8,
+              background: "#f8f8f8",
+            }}
+          >
+            <strong style={{ fontSize: 16 }}>Celkem</strong>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "4px 16px",
+                marginTop: 8,
+                fontSize: 14,
+              }}
+            >
+              <span>Hodiny:</span>
+              <span style={{ textAlign: "right" }}>{totals.hours.toFixed(2)}</span>
+              <span>Km:</span>
+              <span style={{ textAlign: "right" }}>{totals.km.toFixed(1)}</span>
+              <span>Práce:</span>
+              <span style={{ textAlign: "right" }}>{totals.labor.toFixed(0)} Kč</span>
+              <span>Výdaje:</span>
+              <span style={{ textAlign: "right" }}>{totals.expenses.toFixed(0)} Kč</span>
+              <span style={{ fontWeight: 700 }}>Celkem:</span>
+              <span style={{ textAlign: "right", fontWeight: 700 }}>{totals.grand.toFixed(0)} Kč</span>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

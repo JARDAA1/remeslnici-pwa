@@ -276,18 +276,17 @@ export default function WorkPage() {
     return (
       <div>
         <h1>Práce</h1>
-        {error && <p style={{ color: "red" }}>{error}</p>}
+        {error && <p className="error-message">{error}</p>}
 
         {jobs.length === 0 ? (
           <p>Žádné aktivní zakázky. Přidejte zakázku v sekci Zakázky.</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 400 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <label>
               Zakázka:
               <select
                 value={selectedJobId}
                 onChange={(e) => setSelectedJobId(e.target.value)}
-                style={{ display: "block", width: "100%" }}
               >
                 {jobs.map((j) => (
                   <option key={j.id} value={j.id}>
@@ -308,11 +307,10 @@ export default function WorkPage() {
                 }
                 value={rateOverride}
                 onChange={(e) => setRateOverride(e.target.value)}
-                style={{ display: "block", width: "100%" }}
               />
             </label>
 
-            <button onClick={handleStart} style={{ padding: "8px 16px", fontSize: 16 }}>
+            <button onClick={handleStart} data-primary="">
               START
             </button>
           </div>
@@ -325,17 +323,28 @@ export default function WorkPage() {
     return (
       <div>
         <h1>Práce běží</h1>
-        {error && <p style={{ color: "red" }}>{error}</p>}
+        {error && <p className="error-message">{error}</p>}
 
         <p><strong>Zakázka:</strong> {session?.jobName}</p>
-        <p style={{ fontSize: 48, fontFamily: "monospace", margin: "16px 0" }}>{elapsed}</p>
+        <p
+          style={{
+            fontSize: 48,
+            fontFamily: "monospace",
+            margin: "16px 0",
+            textAlign: "center",
+          }}
+        >
+          {elapsed}
+        </p>
 
-        <button onClick={handleStop} style={{ padding: "8px 16px", fontSize: 16 }}>
-          STOP
-        </button>
-        <button onClick={handleCancel} style={{ marginLeft: 8 }}>
-          Zrušit
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button onClick={handleStop} data-primary="">
+            STOP
+          </button>
+          <button onClick={handleCancel}>
+            Zrušit
+          </button>
+        </div>
       </div>
     );
   }
@@ -346,13 +355,13 @@ export default function WorkPage() {
   return (
     <div>
       <h1>Uložit záznam</h1>
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="error-message">{error}</p>}
 
       <p><strong>Zakázka:</strong> {session?.jobName}</p>
       <p><strong>Odpracováno:</strong> {hours.toFixed(2)} h</p>
       <p><strong>Sazba:</strong> {session?.hourlyRate.toFixed(2)} Kč/h</p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 400, marginTop: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
         <label>
           Kilometry:
           <input
@@ -361,7 +370,6 @@ export default function WorkPage() {
             min="0"
             value={kilometers}
             onChange={(e) => setKilometers(e.target.value)}
-            style={{ display: "block", width: "100%" }}
           />
         </label>
 
@@ -373,36 +381,40 @@ export default function WorkPage() {
             min="0"
             value={kmRate}
             onChange={(e) => setKmRate(e.target.value)}
-            style={{ display: "block", width: "100%" }}
           />
         </label>
 
-        <h3 style={{ marginBottom: 0 }}>Výdaje</h3>
+        <h3>Výdaje</h3>
         {expenses.map((row, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4, padding: 8, border: "1px solid #ddd" }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-              <label style={{ flex: 1 }}>
-                Částka:
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={row.amount}
-                  onChange={(e) => updateExpense(i, "amount", e.target.value)}
-                  style={{ display: "block", width: "100%" }}
-                />
-              </label>
-              <label style={{ flex: 1 }}>
-                Kategorie:
-                <input
-                  type="text"
-                  value={row.category}
-                  onChange={(e) => updateExpense(i, "category", e.target.value)}
-                  style={{ display: "block", width: "100%" }}
-                />
-              </label>
-              <button type="button" onClick={() => removeExpense(i)}>X</button>
-            </div>
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              padding: 12,
+              border: "1px solid #ddd",
+              borderRadius: 8,
+            }}
+          >
+            <label>
+              Částka:
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={row.amount}
+                onChange={(e) => updateExpense(i, "amount", e.target.value)}
+              />
+            </label>
+            <label>
+              Kategorie:
+              <input
+                type="text"
+                value={row.category}
+                onChange={(e) => updateExpense(i, "category", e.target.value)}
+              />
+            </label>
             <label>
               Účtenka:
               <input
@@ -410,23 +422,29 @@ export default function WorkPage() {
                 accept="image/*"
                 capture="environment"
                 onChange={(e) => updateExpenseFile(i, e.target.files?.[0] ?? null)}
-                style={{ display: "block" }}
               />
             </label>
             {row.file && <span style={{ fontSize: 12, color: "#666" }}>{row.file.name}</span>}
+            <button type="button" onClick={() => removeExpense(i)} data-compact="">
+              Odebrat výdaj
+            </button>
           </div>
         ))}
-        <button type="button" onClick={addExpenseRow}>+ Přidat výdaj</button>
+        <button type="button" onClick={addExpenseRow}>
+          + Přidat výdaj
+        </button>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
           <button
             onClick={handleSave}
             disabled={saving}
-            style={{ padding: "8px 16px", fontSize: 16 }}
+            data-primary=""
           >
             {saving ? "Ukládám…" : "ULOŽIT"}
           </button>
-          <button onClick={handleCancel} disabled={saving}>Zrušit</button>
+          <button onClick={handleCancel} disabled={saving}>
+            Zrušit
+          </button>
         </div>
       </div>
     </div>

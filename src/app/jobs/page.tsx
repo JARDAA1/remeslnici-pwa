@@ -123,18 +123,17 @@ export default function JobsPage() {
     <div>
       <h1>Zakázky</h1>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="error-message">{error}</p>}
 
       <form onSubmit={handleSubmit} style={{ marginBottom: 24 }}>
         <h2>{editingId ? "Upravit zakázku" : "Nová zakázka"}</h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 400 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <label>
             Název:
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              style={{ display: "block", width: "100%" }}
             />
           </label>
           <label>
@@ -143,7 +142,6 @@ export default function JobsPage() {
               type="text"
               value={client}
               onChange={(e) => setClient(e.target.value)}
-              style={{ display: "block", width: "100%" }}
             />
           </label>
           <label>
@@ -154,7 +152,6 @@ export default function JobsPage() {
               min="0"
               value={defaultHourlyRate}
               onChange={(e) => setDefaultHourlyRate(e.target.value)}
-              style={{ display: "block", width: "100%" }}
             />
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -165,8 +162,10 @@ export default function JobsPage() {
             />
             Aktivní
           </label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit">{editingId ? "Uložit" : "Přidat"}</button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button type="submit" data-primary="">
+              {editingId ? "Uložit" : "Přidat"}
+            </button>
             {editingId && (
               <button type="button" onClick={resetForm}>
                 Zrušit
@@ -179,31 +178,54 @@ export default function JobsPage() {
       {jobs.length === 0 ? (
         <p>Žádné zakázky.</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: 4 }}>Název</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: 4 }}>Klient</th>
-              <th style={{ textAlign: "right", borderBottom: "1px solid #ccc", padding: 4 }}>Sazba</th>
-              <th style={{ textAlign: "center", borderBottom: "1px solid #ccc", padding: 4 }}>Aktivní</th>
-              <th style={{ borderBottom: "1px solid #ccc", padding: 4 }}>Akce</th>
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map((job) => (
-              <tr key={job.id}>
-                <td style={{ padding: 4 }}>{job.name}</td>
-                <td style={{ padding: 4 }}>{job.client}</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{Number(job.default_hourly_rate).toFixed(2)} Kč</td>
-                <td style={{ padding: 4, textAlign: "center" }}>{job.active ? "Ano" : "Ne"}</td>
-                <td style={{ padding: 4, display: "flex", gap: 4 }}>
-                  <button onClick={() => startEdit(job)}>Upravit</button>
-                  <button onClick={() => handleDelete(job.id)}>Smazat</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {jobs.map((job) => (
+            <div
+              key={job.id}
+              style={{
+                padding: 12,
+                border: "1px solid #eee",
+                borderRadius: 8,
+                background: job.active ? "#fff" : "#f9f9f9",
+              }}
+            >
+              <div style={{ marginBottom: 8 }}>
+                <strong style={{ fontSize: 16 }}>{job.name}</strong>
+                {!job.active && (
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: "#999",
+                      marginLeft: 8,
+                    }}
+                  >
+                    (neaktivní)
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 14, color: "#555", marginBottom: 8 }}>
+                <div>Klient: {job.client || "–"}</div>
+                <div>Sazba: {Number(job.default_hourly_rate).toFixed(2)} Kč/h</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => startEdit(job)}
+                  data-compact=""
+                  style={{ flex: 1 }}
+                >
+                  Upravit
+                </button>
+                <button
+                  onClick={() => handleDelete(job.id)}
+                  data-compact=""
+                  style={{ flex: 1 }}
+                >
+                  Smazat
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

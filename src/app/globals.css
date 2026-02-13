@@ -1,0 +1,250 @@
+/* ========================================
+   Mobile-First Baseline: iPhone 13 mini (375×812)
+   ======================================== */
+
+/* --- Reset & Box Model --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #111;
+  background: #fff;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* --- Safe Area (iOS notch + bottom bar) --- */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* --- Typography (mobile scale) --- */
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  line-height: 1.3;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+p {
+  margin: 0 0 12px 0;
+}
+
+/* --- Links --- */
+a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+a:active {
+  opacity: 0.7;
+}
+
+/* --- Buttons --- */
+button {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  font-size: 16px;
+  font-weight: 500;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  color: #111;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+button:active {
+  background: #f0f0f0;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary button style */
+button[data-primary] {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+button[data-primary]:active {
+  background: #333;
+}
+
+/* Compact inline button (for X remove, etc.) */
+button[data-compact] {
+  width: auto;
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+/* --- Form Inputs --- */
+input, select, textarea {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 16px; /* >=16px prevents iOS zoom on focus */
+  font-family: inherit;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  color: #111;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #0066cc;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
+}
+
+input[type="file"] {
+  min-height: auto;
+  padding: 8px;
+  border-style: dashed;
+  font-size: 14px;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23666' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* --- Labels --- */
+label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+label > input,
+label > select,
+label > textarea {
+  margin-top: 4px;
+}
+
+/* --- Table → Mobile-friendly --- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th, td {
+  padding: 8px 4px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  word-break: break-word;
+}
+
+th {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* --- Utility --- */
+.error-message {
+  color: #d32f2f;
+  font-size: 14px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+}
+
+.success-message {
+  color: #2e7d32;
+  font-size: 14px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+}
+
+/* --- App Shell Container --- */
+.app-shell {
+  max-width: 375px;
+  margin: 0 auto;
+  min-height: 100dvh;
+}
+
+/* --- Desktop breakpoint --- */
+@media (min-width: 768px) {
+  .app-shell {
+    max-width: 640px;
+  }
+
+  h1 { font-size: 32px; }
+  h2 { font-size: 26px; }
+
+  button {
+    width: auto;
+    min-width: 120px;
+  }
+
+  table {
+    font-size: 15px;
+  }
+
+  th, td {
+    padding: 10px 8px;
+  }
+
+  /* Allow horizontal nav on desktop */
+  .nav-links {
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    gap: 4px !important;
+  }
+
+  .nav-links a {
+    min-height: auto !important;
+    padding: 8px 12px !important;
+  }
+}

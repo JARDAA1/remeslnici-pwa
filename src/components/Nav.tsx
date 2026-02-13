@@ -22,42 +22,87 @@ export default function Nav() {
   }
 
   return (
-    <nav
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        padding: "12px 16px",
-        borderBottom: "1px solid #ccc",
-        flexWrap: "wrap",
-      }}
-    >
-      {links.map((l) => (
-        <Link
-          key={l.href}
-          href={l.href}
-          style={{ fontWeight: pathname === l.href ? "bold" : "normal" }}
-        >
-          {l.label}
-        </Link>
-      ))}
-
-      <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-        <span style={{ color: "#666" }}>{user.email}</span>
-        <button
-          onClick={logout}
+    <nav style={{ borderBottom: "1px solid #eee", background: "#fafafa" }}>
+      {/* Mobile: vertical stack */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          padding: "12px 16px",
+          gap: 4,
+        }}
+      >
+        {/* Nav links */}
+        <div
+          className="nav-links"
           style={{
-            background: "none",
-            border: "1px solid #ccc",
-            borderRadius: 4,
-            padding: "4px 8px",
-            cursor: "pointer",
-            fontSize: 13,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
           }}
         >
-          Odhlásit
-        </button>
-      </span>
+          {links.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              style={{
+                display: "block",
+                padding: "12px 16px",
+                borderRadius: 8,
+                fontSize: 16,
+                fontWeight: pathname === l.href ? 700 : 400,
+                color: pathname === l.href ? "#111" : "#555",
+                background: pathname === l.href ? "#e8e8e8" : "transparent",
+                textDecoration: "none",
+                minHeight: 48,
+                lineHeight: "24px",
+              }}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </div>
+
+        {/* User info + logout */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "8px 16px",
+            marginTop: 4,
+            borderTop: "1px solid #eee",
+            gap: 8,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 13,
+              color: "#666",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            {user.email}
+          </span>
+          <button
+            onClick={logout}
+            data-compact=""
+            style={{
+              width: "auto",
+              minHeight: 36,
+              padding: "6px 12px",
+              fontSize: 13,
+              flex: "none",
+            }}
+          >
+            Odhlásit
+          </button>
+        </div>
+      </div>
     </nav>
   );
 }

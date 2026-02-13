@@ -90,18 +90,14 @@ export default function SettingsPage() {
     <div>
       <h1>Nastavení</h1>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      {message && <p style={{ color: "green" }}>{message}</p>}
+      {error && <p className="error-message">{error}</p>}
+      {message && <p className="success-message">{message}</p>}
 
       {/* Export */}
       <section style={{ marginBottom: 32 }}>
         <h2>Export zálohy</h2>
         <p>Stáhne kompletní zálohu všech dat jako JSON soubor.</p>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          style={{ padding: "8px 16px" }}
-        >
+        <button onClick={handleExport} disabled={exporting} data-primary="">
           {exporting ? "Exportuji…" : "Export zálohy"}
         </button>
       </section>
@@ -110,19 +106,17 @@ export default function SettingsPage() {
       <section>
         <h2>Import zálohy</h2>
         <p>
-          Nahraje zálohu ze souboru. <strong>Všechna aktuální data budou smazána</strong> a nahrazena daty ze zálohy.
+          Nahraje zálohu ze souboru.{" "}
+          <strong>Všechna aktuální data budou smazána</strong> a nahrazena daty
+          ze zálohy.
         </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 400 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <input
             ref={fileRef}
             type="file"
             accept=".json"
           />
-          <button
-            onClick={handleImport}
-            disabled={importing}
-            style={{ padding: "8px 16px" }}
-          >
+          <button onClick={handleImport} disabled={importing} data-primary="">
             {importing ? "Importuji…" : "Import zálohy"}
           </button>
         </div>

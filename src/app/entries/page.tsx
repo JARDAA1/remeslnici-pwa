@@ -278,19 +278,26 @@ export default function EntriesPage() {
   return (
     <div>
       <h1>Záznamy</h1>
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="error-message">{error}</p>}
 
       {/* Edit form */}
       {editing && (
-        <div style={{ border: "1px solid #999", padding: 16, marginBottom: 24, maxWidth: 500 }}>
+        <div
+          style={{
+            border: "1px solid #ccc",
+            padding: 16,
+            marginBottom: 24,
+            borderRadius: 8,
+            background: "#fafafa",
+          }}
+        >
           <h2>Upravit záznam</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <label>
               Zakázka:
               <select
                 value={editing.jobId}
                 onChange={(e) => updateEditField("jobId", e.target.value)}
-                style={{ display: "block", width: "100%" }}
               >
                 {jobs.map((j) => (
                   <option key={j.id} value={j.id}>
@@ -306,7 +313,6 @@ export default function EntriesPage() {
                 type="datetime-local"
                 value={editing.startTime}
                 onChange={(e) => updateEditField("startTime", e.target.value)}
-                style={{ display: "block", width: "100%" }}
               />
             </label>
 
@@ -316,7 +322,6 @@ export default function EntriesPage() {
                 type="datetime-local"
                 value={editing.endTime}
                 onChange={(e) => updateEditField("endTime", e.target.value)}
-                style={{ display: "block", width: "100%" }}
               />
             </label>
 
@@ -328,7 +333,6 @@ export default function EntriesPage() {
                 min="0"
                 value={editing.hourlyRate}
                 onChange={(e) => updateEditField("hourlyRate", e.target.value)}
-                style={{ display: "block", width: "100%" }}
               />
             </label>
 
@@ -340,7 +344,6 @@ export default function EntriesPage() {
                 min="0"
                 value={editing.kilometers}
                 onChange={(e) => updateEditField("kilometers", e.target.value)}
-                style={{ display: "block", width: "100%" }}
               />
             </label>
 
@@ -352,36 +355,40 @@ export default function EntriesPage() {
                 min="0"
                 value={editing.kmRate}
                 onChange={(e) => updateEditField("kmRate", e.target.value)}
-                style={{ display: "block", width: "100%" }}
               />
             </label>
 
-            <h3 style={{ marginBottom: 0 }}>Výdaje</h3>
+            <h3>Výdaje</h3>
             {editing.expenses.map((row, i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4, padding: 8, border: "1px solid #ddd" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-                  <label style={{ flex: 1 }}>
-                    Částka:
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={row.amount}
-                      onChange={(e) => updateEditExpense(i, "amount", e.target.value)}
-                      style={{ display: "block", width: "100%" }}
-                    />
-                  </label>
-                  <label style={{ flex: 1 }}>
-                    Kategorie:
-                    <input
-                      type="text"
-                      value={row.category}
-                      onChange={(e) => updateEditExpense(i, "category", e.target.value)}
-                      style={{ display: "block", width: "100%" }}
-                    />
-                  </label>
-                  <button type="button" onClick={() => removeEditExpense(i)}>X</button>
-                </div>
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  padding: 12,
+                  border: "1px solid #ddd",
+                  borderRadius: 8,
+                }}
+              >
+                <label>
+                  Částka:
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={row.amount}
+                    onChange={(e) => updateEditExpense(i, "amount", e.target.value)}
+                  />
+                </label>
+                <label>
+                  Kategorie:
+                  <input
+                    type="text"
+                    value={row.category}
+                    onChange={(e) => updateEditExpense(i, "category", e.target.value)}
+                  />
+                </label>
                 <label>
                   Účtenka:
                   <input
@@ -389,73 +396,88 @@ export default function EntriesPage() {
                     accept="image/*"
                     capture="environment"
                     onChange={(e) => updateEditExpenseFile(i, e.target.files?.[0] ?? null)}
-                    style={{ display: "block" }}
                   />
                 </label>
                 {row.file && <span style={{ fontSize: 12, color: "#666" }}>Nový: {row.file.name}</span>}
                 {!row.file && row.existingReceiptUrl && (
                   <span style={{ fontSize: 12, color: "#666" }}>Existující účtenka</span>
                 )}
+                <button type="button" onClick={() => removeEditExpense(i)} data-compact="">
+                  Odebrat výdaj
+                </button>
               </div>
             ))}
-            <button type="button" onClick={addEditExpense}>+ Přidat výdaj</button>
+            <button type="button" onClick={addEditExpense}>
+              + Přidat výdaj
+            </button>
 
-            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button onClick={handleEditSave} disabled={saving} style={{ padding: "8px 16px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+              <button onClick={handleEditSave} disabled={saving} data-primary="">
                 {saving ? "Ukládám…" : "Uložit změny"}
               </button>
-              <button onClick={cancelEdit} disabled={saving}>Zrušit</button>
+              <button onClick={cancelEdit} disabled={saving}>
+                Zrušit
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Entry list */}
+      {/* Entry list — mobile cards */}
       {entries.length === 0 ? (
         <p>Žádné záznamy.</p>
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: 4 }}>Datum</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ccc", padding: 4 }}>Zakázka</th>
-              <th style={{ textAlign: "right", borderBottom: "1px solid #ccc", padding: 4 }}>Hodiny</th>
-              <th style={{ textAlign: "right", borderBottom: "1px solid #ccc", padding: 4 }}>Km</th>
-              <th style={{ textAlign: "right", borderBottom: "1px solid #ccc", padding: 4 }}>Celkem</th>
-              <th style={{ borderBottom: "1px solid #ccc", padding: 4 }}>Akce</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr
-                key={entry.id}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {entries.map((entry) => (
+            <div
+              key={entry.id}
+              style={{
+                padding: 12,
+                border: "1px solid #eee",
+                borderRadius: 8,
+                background: editing?.id === entry.id ? "#eef6ff" : "#fff",
+              }}
+            >
+              <div
                 style={{
-                  backgroundColor: editing?.id === entry.id ? "#eef" : undefined,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                  marginBottom: 4,
                 }}
               >
-                <td style={{ padding: 4 }}>{formatDate(entry.date)}</td>
-                <td style={{ padding: 4 }}>{jobMap[entry.job_id]?.name ?? "–"}</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{getHours(entry)}</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{Number(entry.kilometers)}</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{Number(entry.grand_total).toFixed(2)} Kč</td>
-                <td style={{ padding: 4, display: "flex", gap: 4 }}>
-                  <button
-                    onClick={() => startEdit(entry)}
-                    disabled={editing !== null}
-                  >
-                    Upravit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(entry.id)}
-                    disabled={editing !== null}
-                  >
-                    Smazat
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                <strong>{formatDate(entry.date)}</strong>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>
+                  {Number(entry.grand_total).toFixed(0)} Kč
+                </span>
+              </div>
+              <div style={{ fontSize: 14, color: "#555", marginBottom: 8 }}>
+                <div>{jobMap[entry.job_id]?.name ?? "–"}</div>
+                <div>
+                  {getHours(entry)} h · {Number(entry.kilometers)} km
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => startEdit(entry)}
+                  disabled={editing !== null}
+                  data-compact=""
+                  style={{ flex: 1 }}
+                >
+                  Upravit
+                </button>
+                <button
+                  onClick={() => handleDelete(entry.id)}
+                  disabled={editing !== null}
+                  data-compact=""
+                  style={{ flex: 1 }}
+                >
+                  Smazat
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

@@ -82,27 +82,18 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      style={{
-        maxWidth: 400,
-        margin: "80px auto",
-        padding: 24,
-        border: "1px solid #ddd",
-        borderRadius: 8,
-      }}
-    >
-      <h1 style={{ textAlign: "center", marginBottom: 24 }}>
+    <div style={{ paddingTop: 40 }}>
+      <h1 style={{ textAlign: "center" }}>
         {mode === "login" ? "Přihlášení" : "Registrace"}
       </h1>
 
-      {error && (
-        <p style={{ color: "red", marginBottom: 12 }}>{error}</p>
-      )}
-      {info && (
-        <p style={{ color: "green", marginBottom: 12 }}>{info}</p>
-      )}
+      {error && <p className="error-message">{error}</p>}
+      {info && <p className="success-message">{info}</p>}
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: "flex", flexDirection: "column", gap: 12 }}
+      >
         <label>
           E-mail:
           <input
@@ -111,7 +102,6 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
             required
-            style={{ display: "block", width: "100%", padding: 8, boxSizing: "border-box" }}
           />
         </label>
 
@@ -123,7 +113,6 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
             required
-            style={{ display: "block", width: "100%", padding: 8, boxSizing: "border-box" }}
           />
         </label>
 
@@ -136,7 +125,6 @@ export default function LoginPage() {
               onChange={(e) => setPasswordConfirm(e.target.value)}
               autoComplete="new-password"
               required
-              style={{ display: "block", width: "100%", padding: 8, boxSizing: "border-box" }}
             />
           </label>
         )}
@@ -144,7 +132,8 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          style={{ padding: "10px 16px", fontSize: 16, marginTop: 8 }}
+          data-primary=""
+          style={{ marginTop: 8 }}
         >
           {submitting
             ? "Čekejte…"
@@ -165,7 +154,17 @@ export default function LoginPage() {
                 setError("");
                 setInfo("");
               }}
-              style={{ background: "none", border: "none", color: "blue", cursor: "pointer", textDecoration: "underline" }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#0066cc",
+                cursor: "pointer",
+                textDecoration: "underline",
+                width: "auto",
+                minHeight: "auto",
+                padding: 0,
+                fontSize: 16,
+              }}
             >
               Zaregistrujte se
             </button>
@@ -180,7 +179,17 @@ export default function LoginPage() {
                 setError("");
                 setInfo("");
               }}
-              style={{ background: "none", border: "none", color: "blue", cursor: "pointer", textDecoration: "underline" }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#0066cc",
+                cursor: "pointer",
+                textDecoration: "underline",
+                width: "auto",
+                minHeight: "auto",
+                padding: 0,
+                fontSize: 16,
+              }}
             >
               Přihlaste se
             </button>

@@ -8,8 +8,7 @@
  * 2. Nav (navigation bar, hidden on /login)
  * 3. AuthGuard for protected pages (everything except /login)
  *
- * The /login page renders outside the AuthGuard so it's
- * accessible without authentication.
+ * Mobile-first container: 375px baseline, expands at >=768px.
  */
 
 import { usePathname } from "next/navigation";
@@ -22,9 +21,11 @@ const PUBLIC_PATHS = ["/login"];
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <Nav />
-      <div style={{ padding: 16 }}>
-        <ConditionalGuard>{children}</ConditionalGuard>
+      <div className="app-shell">
+        <Nav />
+        <main style={{ padding: 16 }}>
+          <ConditionalGuard>{children}</ConditionalGuard>
+        </main>
       </div>
     </AuthProvider>
   );
