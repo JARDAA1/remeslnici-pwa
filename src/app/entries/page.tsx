@@ -1,17 +1,25 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import * as workEntryRepository from "@/lib/repositories/workEntryRepository";
-import * as jobRepository from "@/lib/repositories/jobRepository";
-import * as expenseRepository from "@/lib/repositories/expenseRepository";
-import { deleteWorkEntry, updateWorkEntry } from "@/lib/services/workEntryService";
+import { getSupabase } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/supabase/AuthProvider";
+import {
+  deleteWorkEntry,
+  updateWorkEntry,
+} from "@/lib/services/workEntryService";
 import { calculateDurationInHours } from "@/lib/calculations";
 import { toLocalISO, toLocalDate } from "@/lib/utils/time";
-import type { WorkEntry, Job, ExpenseInput } from "@/types";
+import type { Database } from "@/lib/supabase/types";
 
-interface ExpenseRow {
+type WorkEntryRow = Database["public"]["Tables"]["work_entries"]["Row"];
+type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
+type ExpenseRow = Database["public"]["Tables"]["expenses"]["Row"];
+
+interface ExpenseFormRow {
   amount: string;
   category: string;
+  file: File | null;
+  existingReceiptUrl: string;
 }
 
 interface EditState {
@@ -23,35 +31,40 @@ interface EditState {
   hourlyRate: string;
   kilometers: string;
   kmRate: string;
-  expenses: ExpenseRow[];
+  expenses: ExpenseFormRow[];
 }
 
 export default function EntriesPage() {
-  const [entries, setEntries] = useState<WorkEntry[]>([]);
-  const [jobMap, setJobMap] = useState<Record<string, Job>>({});
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const { user } = useAuth();
+  const [entries, setEntries] = useState<WorkEntryRow[]>([]);
+  const [jobMap, setJobMap] = useState<Record<string, JobRow>>({});
+  const [jobs, setJobs] = useState<JobRow[]>([]);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
+    if (!user) return;
     try {
-      const [allEntries, allJobs] = await Promise.all([
-        workEntryRepository.getAll(),
-        jobRepository.getAll(),
-      ]);
+      const { data: allEntries, error: e1 } = await getSupabase()
+        .from("work_entries")
+        .select("*")
+        .order("date", { ascending: false })
+        .order("start_time", { ascending: false });
 
-      allEntries.sort((a, b) => {
-        const dateCmp = b.date.localeCompare(a.date);
-        if (dateCmp !== 0) return dateCmp;
-        return b.startTime.localeCompare(a.startTime);
-      });
+      if (e1) throw e1;
 
-      setEntries(allEntries);
-      setJobs(allJobs);
+      const { data: allJobs, error: e2 } = await getSupabase()
+        .from("jobs")
+        .select("*");
 
-      const map: Record<string, Job> = {};
-      for (const j of allJobs) {
+      if (e2) throw e2;
+
+      setEntries(allEntries ?? []);
+      setJobs(allJobs ?? []);
+
+      const map: Record<string, JobRow> = {};
+      for (const j of allJobs ?? []) {
         map[j.id] = j;
       }
       setJobMap(map);
@@ -59,7 +72,7 @@ export default function EntriesPage() {
       console.error("Failed to load entries", e);
       setError("Nepodařilo se načíst záznamy.");
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     load();
@@ -72,17 +85,20 @@ export default function EntriesPage() {
       await load();
     } catch (e) {
       console.error("Failed to delete entry", e);
-      setError("Nepodařilo se smazat záznam.");
+      setError("Nepodařilo se smazat záznam. Pro uložení je potřeba připojení k internetu.");
     }
   }
 
-  async function startEdit(entry: WorkEntry) {
+  async function startEdit(entry: WorkEntryRow) {
     setError("");
     try {
-      // Load existing expenses for this entry
-      const entryExpenses = await expenseRepository.getByWorkEntryId(entry.id);
+      const { data: entryExpenses, error: expErr } = await getSupabase()
+        .from("expenses")
+        .select("*")
+        .eq("work_entry_id", entry.id);
 
-      // Convert ISO datetime to datetime-local format (YYYY-MM-DDTHH:mm)
+      if (expErr) throw expErr;
+
       const toLocalInput = (iso: string) => {
         const d = new Date(iso);
         const pad = (n: number) => String(n).padStart(2, "0");
@@ -92,15 +108,17 @@ export default function EntriesPage() {
       setEditing({
         id: entry.id,
         date: entry.date,
-        startTime: toLocalInput(entry.startTime),
-        endTime: toLocalInput(entry.endTime),
-        jobId: entry.jobId,
-        hourlyRate: String(entry.hourlyRateUsed),
+        startTime: toLocalInput(entry.start_time),
+        endTime: toLocalInput(entry.end_time),
+        jobId: entry.job_id,
+        hourlyRate: String(entry.hourly_rate_used),
         kilometers: String(entry.kilometers),
-        kmRate: String(entry.kmRateUsed),
-        expenses: entryExpenses.map((exp) => ({
+        kmRate: String(entry.km_rate_used),
+        expenses: (entryExpenses ?? []).map((exp: ExpenseRow) => ({
           amount: String(exp.amount),
           category: exp.category,
+          file: null,
+          existingReceiptUrl: exp.receipt_url ?? "",
         })),
       });
     } catch (e) {
@@ -123,16 +141,26 @@ export default function EntriesPage() {
     if (!editing) return;
     setEditing({
       ...editing,
-      expenses: [...editing.expenses, { amount: "", category: "" }],
+      expenses: [...editing.expenses, { amount: "", category: "", file: null, existingReceiptUrl: "" }],
     });
   }
 
-  function updateEditExpense(index: number, field: keyof ExpenseRow, value: string) {
+  function updateEditExpense(index: number, field: "amount" | "category", value: string) {
     if (!editing) return;
     setEditing({
       ...editing,
       expenses: editing.expenses.map((row, i) =>
         i === index ? { ...row, [field]: value } : row
+      ),
+    });
+  }
+
+  function updateEditExpenseFile(index: number, file: File | null) {
+    if (!editing) return;
+    setEditing({
+      ...editing,
+      expenses: editing.expenses.map((row, i) =>
+        i === index ? { ...row, file } : row
       ),
     });
   }
@@ -146,10 +174,9 @@ export default function EntriesPage() {
   }
 
   async function handleEditSave() {
-    if (!editing || saving) return;
+    if (!editing || saving || !user) return;
     setError("");
 
-    // Validate
     const hourlyRate = parseFloat(editing.hourlyRate);
     const km = parseFloat(editing.kilometers) || 0;
     const kmRateNum = parseFloat(editing.kmRate) || 0;
@@ -167,7 +194,6 @@ export default function EntriesPage() {
       return;
     }
 
-    // datetime-local → ISO string with local timezone offset
     const startDate = new Date(editing.startTime);
     const endDate = new Date(editing.endTime);
 
@@ -188,7 +214,7 @@ export default function EntriesPage() {
     const endISO = toLocalISO(endDate);
 
     // Validate expenses
-    const expenseInputs: ExpenseInput[] = [];
+    const expenseInputs: { amount: number; category: string; file: File | null }[] = [];
     for (let i = 0; i < editing.expenses.length; i++) {
       const row = editing.expenses[i];
       const amount = parseFloat(row.amount);
@@ -200,11 +226,7 @@ export default function EntriesPage() {
         setError(`Výdaj #${i + 1}: kategorie je povinná.`);
         return;
       }
-      expenseInputs.push({
-        amount,
-        category: row.category.trim(),
-        receiptImageUrl: "",
-      });
+      expenseInputs.push({ amount, category: row.category.trim(), file: row.file });
     }
 
     const date = toLocalDate(startDate);
@@ -212,6 +234,7 @@ export default function EntriesPage() {
     setSaving(true);
     try {
       await updateWorkEntry({
+        userId: user.id,
         id: editing.id,
         input: {
           date,
@@ -229,7 +252,7 @@ export default function EntriesPage() {
       await load();
     } catch (e) {
       console.error("Failed to update entry", e);
-      setError("Nepodařilo se uložit změny.");
+      setError("Nepodařilo se uložit změny. Pro uložení je potřeba připojení k internetu.");
     } finally {
       setSaving(false);
     }
@@ -242,9 +265,9 @@ export default function EntriesPage() {
     return d.toLocaleDateString("cs-CZ");
   }
 
-  function getHours(entry: WorkEntry): string {
+  function getHours(entry: WorkEntryRow): string {
     try {
-      return calculateDurationInHours(entry.startTime, entry.endTime).toFixed(2);
+      return calculateDurationInHours(entry.start_time, entry.end_time).toFixed(2);
     } catch {
       return "–";
     }
@@ -335,28 +358,44 @@ export default function EntriesPage() {
 
             <h3 style={{ marginBottom: 0 }}>Výdaje</h3>
             {editing.expenses.map((row, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, alignItems: "end" }}>
-                <label style={{ flex: 1 }}>
-                  Částka:
+              <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4, padding: 8, border: "1px solid #ddd" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
+                  <label style={{ flex: 1 }}>
+                    Částka:
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.amount}
+                      onChange={(e) => updateEditExpense(i, "amount", e.target.value)}
+                      style={{ display: "block", width: "100%" }}
+                    />
+                  </label>
+                  <label style={{ flex: 1 }}>
+                    Kategorie:
+                    <input
+                      type="text"
+                      value={row.category}
+                      onChange={(e) => updateEditExpense(i, "category", e.target.value)}
+                      style={{ display: "block", width: "100%" }}
+                    />
+                  </label>
+                  <button type="button" onClick={() => removeEditExpense(i)}>X</button>
+                </div>
+                <label>
+                  Účtenka:
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={row.amount}
-                    onChange={(e) => updateEditExpense(i, "amount", e.target.value)}
-                    style={{ display: "block", width: "100%" }}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => updateEditExpenseFile(i, e.target.files?.[0] ?? null)}
+                    style={{ display: "block" }}
                   />
                 </label>
-                <label style={{ flex: 1 }}>
-                  Kategorie:
-                  <input
-                    type="text"
-                    value={row.category}
-                    onChange={(e) => updateEditExpense(i, "category", e.target.value)}
-                    style={{ display: "block", width: "100%" }}
-                  />
-                </label>
-                <button type="button" onClick={() => removeEditExpense(i)}>X</button>
+                {row.file && <span style={{ fontSize: 12, color: "#666" }}>Nový: {row.file.name}</span>}
+                {!row.file && row.existingReceiptUrl && (
+                  <span style={{ fontSize: 12, color: "#666" }}>Existující účtenka</span>
+                )}
               </div>
             ))}
             <button type="button" onClick={addEditExpense}>+ Přidat výdaj</button>
@@ -395,10 +434,10 @@ export default function EntriesPage() {
                 }}
               >
                 <td style={{ padding: 4 }}>{formatDate(entry.date)}</td>
-                <td style={{ padding: 4 }}>{jobMap[entry.jobId]?.name ?? "–"}</td>
+                <td style={{ padding: 4 }}>{jobMap[entry.job_id]?.name ?? "–"}</td>
                 <td style={{ padding: 4, textAlign: "right" }}>{getHours(entry)}</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{entry.kilometers}</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{entry.grandTotal.toFixed(2)} Kč</td>
+                <td style={{ padding: 4, textAlign: "right" }}>{Number(entry.kilometers)}</td>
+                <td style={{ padding: 4, textAlign: "right" }}>{Number(entry.grand_total).toFixed(2)} Kč</td>
                 <td style={{ padding: 4, display: "flex", gap: 4 }}>
                   <button
                     onClick={() => startEdit(entry)}

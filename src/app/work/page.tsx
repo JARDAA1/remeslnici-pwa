@@ -1,27 +1,29 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import * as jobRepository from "@/lib/repositories/jobRepository";
+import { getSupabase } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/supabase/AuthProvider";
 import { createWorkEntry } from "@/lib/services/workEntryService";
 import { calculateDurationInHours } from "@/lib/calculations";
 import { nowLocalISO, toLocalDate } from "@/lib/utils/time";
-import type { Job, ExpenseInput } from "@/types";
+import type { Database } from "@/lib/supabase/types";
 
-// Default km rate (CZK per km) — could be made configurable later
+type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
+
 const DEFAULT_KM_RATE = 5;
-
 const SESSION_STORAGE_KEY = "remeslnici-active-session";
 
 interface ActiveSession {
   jobId: string;
   jobName: string;
   hourlyRate: number;
-  startTime: string; // ISO datetime
+  startTime: string;
 }
 
 interface ExpenseRow {
   amount: string;
   category: string;
+  file: File | null;
 }
 
 type Phase = "idle" | "running" | "saving";
@@ -32,7 +34,7 @@ function persistSession(session: ActiveSession): void {
   try {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   } catch {
-    // localStorage unavailable — best-effort
+    // best-effort
   }
 }
 
@@ -41,7 +43,6 @@ function loadPersistedSession(): ActiveSession | null {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    // Basic shape validation
     if (
       typeof parsed.jobId === "string" &&
       typeof parsed.jobName === "string" &&
@@ -65,11 +66,12 @@ function clearPersistedSession(): void {
 }
 
 export default function WorkPage() {
+  const { user } = useAuth();
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
 
   // Idle phase
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobs, setJobs] = useState<JobRow[]>([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [rateOverride, setRateOverride] = useState("");
 
@@ -95,8 +97,15 @@ export default function WorkPage() {
   }, []);
 
   async function loadJobs() {
+    if (!user) return;
     try {
-      const active = await jobRepository.getActive();
+      const { data, error: err } = await getSupabase()
+        .from("jobs")
+        .select("*")
+        .eq("active", true)
+        .order("name");
+      if (err) throw err;
+      const active = data ?? [];
       setJobs(active);
       if (active.length > 0 && !selectedJobId) {
         setSelectedJobId(active[0].id);
@@ -110,7 +119,7 @@ export default function WorkPage() {
   useEffect(() => {
     loadJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user]);
 
   // Timer tick
   const updateElapsed = useCallback(() => {
@@ -145,7 +154,7 @@ export default function WorkPage() {
 
     const rate = rateOverride.trim()
       ? parseFloat(rateOverride)
-      : job.defaultHourlyRate;
+      : Number(job.default_hourly_rate);
 
     if (isNaN(rate) || rate < 0) {
       setError("Neplatná hodinová sazba.");
@@ -170,17 +179,21 @@ export default function WorkPage() {
     setKmRate(String(DEFAULT_KM_RATE));
     setExpenses([]);
     setPhase("saving");
-    // Keep localStorage — session is not done yet, just entering save form.
-    // If user reloads during saving phase, they go back to running (safe fallback).
   }
 
   function addExpenseRow() {
-    setExpenses((prev) => [...prev, { amount: "", category: "" }]);
+    setExpenses((prev) => [...prev, { amount: "", category: "", file: null }]);
   }
 
-  function updateExpense(index: number, field: keyof ExpenseRow, value: string) {
+  function updateExpense(index: number, field: "amount" | "category", value: string) {
     setExpenses((prev) =>
       prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
+    );
+  }
+
+  function updateExpenseFile(index: number, file: File | null) {
+    setExpenses((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, file } : row))
     );
   }
 
@@ -189,7 +202,7 @@ export default function WorkPage() {
   }
 
   async function handleSave() {
-    if (!session || saving) return;
+    if (!session || saving || !user) return;
     setError("");
 
     const km = parseFloat(kilometers) || 0;
@@ -205,7 +218,7 @@ export default function WorkPage() {
     }
 
     // Validate expenses
-    const expenseInputs: ExpenseInput[] = [];
+    const expenseInputs: { amount: number; category: string; file: File | null }[] = [];
     for (let i = 0; i < expenses.length; i++) {
       const row = expenses[i];
       const amount = parseFloat(row.amount);
@@ -217,11 +230,7 @@ export default function WorkPage() {
         setError(`Výdaj #${i + 1}: kategorie je povinná.`);
         return;
       }
-      expenseInputs.push({
-        amount,
-        category: row.category.trim(),
-        receiptImageUrl: "",
-      });
+      expenseInputs.push({ amount, category: row.category.trim(), file: row.file });
     }
 
     const date = toLocalDate(session.startTime);
@@ -229,6 +238,7 @@ export default function WorkPage() {
     setSaving(true);
     try {
       await createWorkEntry({
+        userId: user.id,
         input: {
           date,
           startTime: session.startTime,
@@ -241,14 +251,13 @@ export default function WorkPage() {
         expenses: expenseInputs,
       });
 
-      // Only clear localStorage after successful save
       clearPersistedSession();
       setSession(null);
       setPhase("idle");
       setRateOverride("");
     } catch (e) {
       console.error("Failed to save work entry", e);
-      setError("Nepodařilo se uložit záznam.");
+      setError("Nepodařilo se uložit záznam. Pro uložení je potřeba připojení k internetu.");
     } finally {
       setSaving(false);
     }
@@ -282,7 +291,7 @@ export default function WorkPage() {
               >
                 {jobs.map((j) => (
                   <option key={j.id} value={j.id}>
-                    {j.name} ({j.client}) – {j.defaultHourlyRate} Kč/h
+                    {j.name} ({j.client}) – {Number(j.default_hourly_rate)} Kč/h
                   </option>
                 ))}
               </select>
@@ -295,7 +304,7 @@ export default function WorkPage() {
                 step="0.01"
                 min="0"
                 placeholder={
-                  jobs.find((j) => j.id === selectedJobId)?.defaultHourlyRate.toString() ?? ""
+                  jobs.find((j) => j.id === selectedJobId)?.default_hourly_rate.toString() ?? ""
                 }
                 value={rateOverride}
                 onChange={(e) => setRateOverride(e.target.value)}
@@ -370,28 +379,41 @@ export default function WorkPage() {
 
         <h3 style={{ marginBottom: 0 }}>Výdaje</h3>
         {expenses.map((row, i) => (
-          <div key={i} style={{ display: "flex", gap: 8, alignItems: "end" }}>
-            <label style={{ flex: 1 }}>
-              Částka:
+          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4, padding: 8, border: "1px solid #ddd" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
+              <label style={{ flex: 1 }}>
+                Částka:
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={row.amount}
+                  onChange={(e) => updateExpense(i, "amount", e.target.value)}
+                  style={{ display: "block", width: "100%" }}
+                />
+              </label>
+              <label style={{ flex: 1 }}>
+                Kategorie:
+                <input
+                  type="text"
+                  value={row.category}
+                  onChange={(e) => updateExpense(i, "category", e.target.value)}
+                  style={{ display: "block", width: "100%" }}
+                />
+              </label>
+              <button type="button" onClick={() => removeExpense(i)}>X</button>
+            </div>
+            <label>
+              Účtenka:
               <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={row.amount}
-                onChange={(e) => updateExpense(i, "amount", e.target.value)}
-                style={{ display: "block", width: "100%" }}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => updateExpenseFile(i, e.target.files?.[0] ?? null)}
+                style={{ display: "block" }}
               />
             </label>
-            <label style={{ flex: 1 }}>
-              Kategorie:
-              <input
-                type="text"
-                value={row.category}
-                onChange={(e) => updateExpense(i, "category", e.target.value)}
-                style={{ display: "block", width: "100%" }}
-              />
-            </label>
-            <button type="button" onClick={() => removeExpense(i)}>X</button>
+            {row.file && <span style={{ fontSize: 12, color: "#666" }}>{row.file.name}</span>}
           </div>
         ))}
         <button type="button" onClick={addExpenseRow}>+ Přidat výdaj</button>

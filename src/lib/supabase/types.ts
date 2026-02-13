@@ -3,9 +3,7 @@
  *
  * Generated manually to match the SQL schema in
  * supabase/migrations/00001_initial_schema.sql
- *
- * These types provide autocomplete and type safety for all
- * Supabase client queries (select, insert, update, delete).
+ * + 00002_receipts_storage.sql
  */
 
 export interface Database {
@@ -39,6 +37,7 @@ export interface Database {
           active?: boolean;
           created_at?: string;
         };
+        Relationships: [];
       };
       work_entries: {
         Row: {
@@ -89,6 +88,7 @@ export interface Database {
           grand_total?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       expenses: {
         Row: {
@@ -97,6 +97,7 @@ export interface Database {
           work_entry_id: string;
           amount: number;
           category: string;
+          receipt_url: string;
           created_at: string;
         };
         Insert: {
@@ -105,6 +106,7 @@ export interface Database {
           work_entry_id: string;
           amount: number;
           category: string;
+          receipt_url?: string;
           created_at?: string;
         };
         Update: {
@@ -113,9 +115,17 @@ export interface Database {
           work_entry_id?: string;
           amount?: number;
           category?: string;
+          receipt_url?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      [_ in never]: never;
     };
   };
 }

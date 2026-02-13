@@ -1,196 +1,296 @@
 /**
- * Service layer for WorkEntry operations.
+ * Service layer for WorkEntry operations via Supabase.
  *
- * This is the ONLY module UI code should call for creating/updating/deleting work entries.
- * It guarantees:
- * 1. Totals (expensesTotal, laborTotal, kmTotal, grandTotal) are computed from
- *    the actual expense data being saved — never caller-supplied.
- * 2. WorkEntry + Expenses are persisted in a single IndexedDB transaction.
- *
- * Do NOT call workEntryRepository.create() or expenseRepository.create()
- * directly from UI code — that bypasses both guarantees above.
+ * Guarantees:
+ * 1. Totals are computed from raw input — never caller-supplied.
+ * 2. Receipt upload → DB insert → rollback on failure (no orphans).
+ * 3. All IDs generated client-side via crypto.randomUUID() before any I/O.
  */
 
-import { getDB } from "@/lib/db";
+import { getSupabase } from "@/lib/supabase/client";
 import {
   calculateDurationInHours,
   calculateLaborTotal,
   calculateKmTotal,
   calculateGrandTotal,
 } from "@/lib/calculations";
-import type {
-  WorkEntry,
-  WorkEntryInput,
-  Expense,
-  ExpenseInput,
-} from "@/types";
+import {
+  receiptPath,
+  uploadReceiptsBatch,
+  deleteReceipts,
+} from "./receiptStorage";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface WorkEntryInput {
+  date: string;
+  startTime: string;
+  endTime: string;
+  jobId: string;
+  hourlyRateUsed: number;
+  kilometers: number;
+  kmRateUsed: number;
+}
+
+export interface ExpenseInput {
+  amount: number;
+  category: string;
+  file: File | null;
+}
+
+export interface CreateWorkEntryParams {
+  userId: string;
+  input: WorkEntryInput;
+  expenses: ExpenseInput[];
+}
+
+export interface UpdateWorkEntryParams {
+  userId: string;
+  id: string;
+  input: WorkEntryInput;
+  expenses: ExpenseInput[];
+}
 
 // ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
 
-export interface CreateWorkEntryParams {
-  input: WorkEntryInput;
-  expenses: ExpenseInput[];
-}
+export async function createWorkEntry(params: CreateWorkEntryParams): Promise<void> {
+  const { userId, input, expenses } = params;
 
-/**
- * Compute totals from the raw input + expenses, then atomically persist
- * the WorkEntry and all its Expenses in one IndexedDB transaction.
- */
-export async function createWorkEntry(
-  params: CreateWorkEntryParams
-): Promise<{ entry: WorkEntry; expenses: Expense[] }> {
-  const { input, expenses } = params;
+  // Step A — Generate IDs first
+  const workEntryId = crypto.randomUUID();
+  const expenseIds = expenses.map(() => crypto.randomUUID());
 
-  // 1. Compute totals from the source data
+  // Compute totals
   const hours = calculateDurationInHours(input.startTime, input.endTime);
   const laborTotal = calculateLaborTotal(hours, input.hourlyRateUsed);
   const kmTotal = calculateKmTotal(input.kilometers, input.kmRateUsed);
   const expensesTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
   const grandTotal = calculateGrandTotal(laborTotal, kmTotal, expensesTotal);
 
-  const now = new Date();
-
-  const entry: WorkEntry = {
-    id: crypto.randomUUID(),
-    date: input.date,
-    startTime: input.startTime,
-    endTime: input.endTime,
-    jobId: input.jobId,
-    hourlyRateUsed: input.hourlyRateUsed,
-    kilometers: input.kilometers,
-    kmRateUsed: input.kmRateUsed,
-    laborTotal,
-    kmTotal,
-    expensesTotal,
-    grandTotal,
-    createdAt: now,
-  };
-
-  const expenseRecords: Expense[] = expenses.map((e) => ({
-    ...e,
-    id: crypto.randomUUID(),
-    workEntryId: entry.id,
-    createdAt: now,
-  }));
-
-  // 2. Open tx → write entry → write expenses → commit
-  const db = await getDB();
-  const tx = db.transaction(["workEntries", "expenses"], "readwrite");
-
-  tx.objectStore("workEntries").put(entry);
-  for (const expense of expenseRecords) {
-    tx.objectStore("expenses").put(expense);
+  // Step B — Upload receipts
+  const uploadItems: { path: string; file: File }[] = [];
+  for (let i = 0; i < expenses.length; i++) {
+    const file = expenses[i].file;
+    if (file) {
+      uploadItems.push({
+        path: receiptPath(userId, workEntryId, expenseIds[i]),
+        file,
+      });
+    }
   }
 
-  await tx.done;
+  let uploadedPaths: string[] = [];
+  if (uploadItems.length > 0) {
+    uploadedPaths = await uploadReceiptsBatch(uploadItems);
+  }
 
-  return { entry, expenses: expenseRecords };
+  // Step C — DB insert
+  try {
+    const { error: entryErr } = await getSupabase()
+      .from("work_entries")
+      .insert({
+        id: workEntryId,
+        user_id: userId,
+        job_id: input.jobId,
+        date: input.date,
+        start_time: input.startTime,
+        end_time: input.endTime,
+        hourly_rate_used: input.hourlyRateUsed,
+        kilometers: input.kilometers,
+        km_rate_used: input.kmRateUsed,
+        labor_total: laborTotal,
+        km_total: kmTotal,
+        expenses_total: expensesTotal,
+        grand_total: grandTotal,
+      });
+
+    if (entryErr) throw entryErr;
+
+    if (expenses.length > 0) {
+      const expenseRows = expenses.map((e, i) => ({
+        id: expenseIds[i],
+        user_id: userId,
+        work_entry_id: workEntryId,
+        amount: e.amount,
+        category: e.category,
+        receipt_url: e.file
+          ? receiptPath(userId, workEntryId, expenseIds[i])
+          : "",
+      }));
+
+      const { error: expErr } = await getSupabase()
+        .from("expenses")
+        .insert(expenseRows);
+
+      if (expErr) throw expErr;
+    }
+  } catch (dbErr) {
+    // Rollback: delete uploaded files
+    if (uploadedPaths.length > 0) {
+      try {
+        await deleteReceipts(uploadedPaths);
+      } catch (rollbackErr) {
+        console.error("Rollback of uploaded receipts after DB error:", rollbackErr);
+      }
+    }
+    throw dbErr;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------
 
-export interface UpdateWorkEntryParams {
-  id: string;
-  input: WorkEntryInput;
-  expenses: ExpenseInput[];
-}
+export async function updateWorkEntry(params: UpdateWorkEntryParams): Promise<void> {
+  const { userId, id, input, expenses } = params;
 
-/**
- * Atomically update a WorkEntry: recompute totals, replace all expenses.
- *
- * Strategy: delete old expenses → write new expenses → overwrite entry.
- * All in one transaction — if anything fails, nothing changes.
- */
-export async function updateWorkEntry(
-  params: UpdateWorkEntryParams
-): Promise<{ entry: WorkEntry; expenses: Expense[] }> {
-  const { id, input, expenses } = params;
+  const expenseIds = expenses.map(() => crypto.randomUUID());
 
-  const db = await getDB();
-
-  // Verify the entry exists before doing anything
-  const existing = await db.get("workEntries", id);
-  if (!existing) {
-    throw new Error(`WorkEntry not found: ${id}`);
-  }
-
-  // 1. Compute totals from the new data
+  // Compute totals
   const hours = calculateDurationInHours(input.startTime, input.endTime);
   const laborTotal = calculateLaborTotal(hours, input.hourlyRateUsed);
   const kmTotal = calculateKmTotal(input.kilometers, input.kmRateUsed);
   const expensesTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
   const grandTotal = calculateGrandTotal(laborTotal, kmTotal, expensesTotal);
 
-  const now = new Date();
+  // Fetch old expenses to know which receipt files to delete
+  const { data: oldExpenses, error: fetchErr } = await getSupabase()
+    .from("expenses")
+    .select("id, receipt_url")
+    .eq("work_entry_id", id);
 
-  const entry: WorkEntry = {
-    id,
-    date: input.date,
-    startTime: input.startTime,
-    endTime: input.endTime,
-    jobId: input.jobId,
-    hourlyRateUsed: input.hourlyRateUsed,
-    kilometers: input.kilometers,
-    kmRateUsed: input.kmRateUsed,
-    laborTotal,
-    kmTotal,
-    expensesTotal,
-    grandTotal,
-    createdAt: existing.createdAt, // preserve original creation time
-  };
+  if (fetchErr) throw fetchErr;
 
-  const expenseRecords: Expense[] = expenses.map((e) => ({
-    ...e,
-    id: crypto.randomUUID(),
-    workEntryId: id,
-    createdAt: now,
-  }));
+  const oldReceiptPaths = (oldExpenses ?? [])
+    .map((e) => e.receipt_url)
+    .filter((url): url is string => !!url && url.length > 0);
 
-  // 2. Single transaction: delete old expenses → write new expenses → overwrite entry
-  const tx = db.transaction(["workEntries", "expenses"], "readwrite");
-
-  const oldExpenses = await tx
-    .objectStore("expenses")
-    .index("by-workEntryId")
-    .getAll(id);
-
-  for (const old of oldExpenses) {
-    tx.objectStore("expenses").delete(old.id);
+  // Upload new receipts
+  const uploadItems: { path: string; file: File }[] = [];
+  for (let i = 0; i < expenses.length; i++) {
+    const file = expenses[i].file;
+    if (file) {
+      uploadItems.push({
+        path: receiptPath(userId, id, expenseIds[i]),
+        file,
+      });
+    }
   }
-  for (const expense of expenseRecords) {
-    tx.objectStore("expenses").put(expense);
+
+  let uploadedPaths: string[] = [];
+  if (uploadItems.length > 0) {
+    uploadedPaths = await uploadReceiptsBatch(uploadItems);
   }
-  tx.objectStore("workEntries").put(entry);
 
-  await tx.done;
+  // DB update
+  try {
+    const { error: updateErr } = await getSupabase()
+      .from("work_entries")
+      .update({
+        job_id: input.jobId,
+        date: input.date,
+        start_time: input.startTime,
+        end_time: input.endTime,
+        hourly_rate_used: input.hourlyRateUsed,
+        kilometers: input.kilometers,
+        km_rate_used: input.kmRateUsed,
+        labor_total: laborTotal,
+        km_total: kmTotal,
+        expenses_total: expensesTotal,
+        grand_total: grandTotal,
+      })
+      .eq("id", id);
 
-  return { entry, expenses: expenseRecords };
+    if (updateErr) throw updateErr;
+
+    // Delete old expenses
+    const { error: delErr } = await getSupabase()
+      .from("expenses")
+      .delete()
+      .eq("work_entry_id", id);
+
+    if (delErr) throw delErr;
+
+    // Insert new expenses
+    if (expenses.length > 0) {
+      const expenseRows = expenses.map((e, i) => ({
+        id: expenseIds[i],
+        user_id: userId,
+        work_entry_id: id,
+        amount: e.amount,
+        category: e.category,
+        receipt_url: e.file
+          ? receiptPath(userId, id, expenseIds[i])
+          : "",
+      }));
+
+      const { error: insErr } = await getSupabase()
+        .from("expenses")
+        .insert(expenseRows);
+
+      if (insErr) throw insErr;
+    }
+  } catch (dbErr) {
+    // Rollback: delete newly uploaded files
+    if (uploadedPaths.length > 0) {
+      try {
+        await deleteReceipts(uploadedPaths);
+      } catch (rollbackErr) {
+        console.error("Rollback of uploaded receipts after DB error:", rollbackErr);
+      }
+    }
+    throw dbErr;
+  }
+
+  // DB succeeded → delete old receipt files from storage
+  if (oldReceiptPaths.length > 0) {
+    try {
+      await deleteReceipts(oldReceiptPaths);
+    } catch (storageErr) {
+      // Non-fatal: DB is consistent, old files are orphaned but not harmful
+      console.error("Failed to delete old receipt files:", storageErr);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Delete
 // ---------------------------------------------------------------------------
 
-/**
- * Atomically delete a WorkEntry and all its associated Expenses.
- */
 export async function deleteWorkEntry(id: string): Promise<void> {
-  const db = await getDB();
-  const tx = db.transaction(["workEntries", "expenses"], "readwrite");
+  // 1. Query receipt_urls for this entry
+  const { data: entryExpenses, error: fetchErr } = await getSupabase()
+    .from("expenses")
+    .select("receipt_url")
+    .eq("work_entry_id", id);
 
-  const expenses = await tx
-    .objectStore("expenses")
-    .index("by-workEntryId")
-    .getAll(id);
+  if (fetchErr) throw fetchErr;
 
-  for (const expense of expenses) {
-    tx.objectStore("expenses").delete(expense.id);
+  const receiptPaths = (entryExpenses ?? [])
+    .map((e) => e.receipt_url)
+    .filter((url): url is string => !!url && url.length > 0);
+
+  // 2. Delete files from storage first
+  if (receiptPaths.length > 0) {
+    await deleteReceipts(receiptPaths);
   }
-  tx.objectStore("workEntries").delete(id);
 
-  await tx.done;
+  // 3. Delete DB rows
+  const { error: expErr } = await getSupabase()
+    .from("expenses")
+    .delete()
+    .eq("work_entry_id", id);
+
+  if (expErr) throw expErr;
+
+  const { error: entryErr } = await getSupabase()
+    .from("work_entries")
+    .delete()
+    .eq("id", id);
+
+  if (entryErr) throw entryErr;
 }

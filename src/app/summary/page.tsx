@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import * as workEntryRepository from "@/lib/repositories/workEntryRepository";
-import * as jobRepository from "@/lib/repositories/jobRepository";
+import { getSupabase } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/supabase/AuthProvider";
 import { calculateDurationInHours } from "@/lib/calculations";
-import type { WorkEntry, Job } from "@/types";
+import type { Database } from "@/lib/supabase/types";
+
+type WorkEntryRow = Database["public"]["Tables"]["work_entries"]["Row"];
+type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
 interface JobSummary {
   jobId: string;
@@ -24,29 +27,38 @@ function getCurrentMonth(): string {
 }
 
 export default function SummaryPage() {
+  const { user } = useAuth();
   const [month, setMonth] = useState(getCurrentMonth);
-  const [entries, setEntries] = useState<WorkEntry[]>([]);
-  const [jobMap, setJobMap] = useState<Record<string, Job>>({});
+  const [entries, setEntries] = useState<WorkEntryRow[]>([]);
+  const [jobMap, setJobMap] = useState<Record<string, JobRow>>({});
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
+    if (!user) return;
     try {
-      // month is "YYYY-MM", derive date range
       const from = `${month}-01`;
-      // Last day: go to first day of next month, subtract 1 day
       const [y, m] = month.split("-").map(Number);
       const lastDay = new Date(y, m, 0).getDate();
       const to = `${month}-${String(lastDay).padStart(2, "0")}`;
 
-      const [monthEntries, allJobs] = await Promise.all([
-        workEntryRepository.getByDateRange(from, to),
-        jobRepository.getAll(),
-      ]);
+      const { data: monthEntries, error: e1 } = await getSupabase()
+        .from("work_entries")
+        .select("*")
+        .gte("date", from)
+        .lte("date", to);
 
-      setEntries(monthEntries);
+      if (e1) throw e1;
 
-      const map: Record<string, Job> = {};
-      for (const j of allJobs) {
+      const { data: allJobs, error: e2 } = await getSupabase()
+        .from("jobs")
+        .select("*");
+
+      if (e2) throw e2;
+
+      setEntries(monthEntries ?? []);
+
+      const map: Record<string, JobRow> = {};
+      for (const j of allJobs ?? []) {
         map[j.id] = j;
       }
       setJobMap(map);
@@ -54,7 +66,7 @@ export default function SummaryPage() {
       console.error("Failed to load summary", e);
       setError("Nepodařilo se načíst přehled.");
     }
-  }, [month]);
+  }, [month, user]);
 
   useEffect(() => {
     load();
@@ -64,32 +76,32 @@ export default function SummaryPage() {
   const byJob = new Map<string, JobSummary>();
 
   for (const entry of entries) {
-    let summary = byJob.get(entry.jobId);
+    let summary = byJob.get(entry.job_id);
     if (!summary) {
       summary = {
-        jobId: entry.jobId,
-        jobName: jobMap[entry.jobId]?.name ?? "–",
+        jobId: entry.job_id,
+        jobName: jobMap[entry.job_id]?.name ?? "–",
         hours: 0,
         km: 0,
         labor: 0,
         expenses: 0,
         grand: 0,
       };
-      byJob.set(entry.jobId, summary);
+      byJob.set(entry.job_id, summary);
     }
 
     let hours = 0;
     try {
-      hours = calculateDurationInHours(entry.startTime, entry.endTime);
+      hours = calculateDurationInHours(entry.start_time, entry.end_time);
     } catch {
       // skip invalid
     }
 
     summary.hours += hours;
-    summary.km += entry.kilometers;
-    summary.labor += entry.laborTotal;
-    summary.expenses += entry.expensesTotal;
-    summary.grand += entry.grandTotal;
+    summary.km += Number(entry.kilometers);
+    summary.labor += Number(entry.labor_total);
+    summary.expenses += Number(entry.expenses_total);
+    summary.grand += Number(entry.grand_total);
   }
 
   const summaries = Array.from(byJob.values());

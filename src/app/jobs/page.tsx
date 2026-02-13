@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import * as jobRepository from "@/lib/repositories/jobRepository";
-import type { Job } from "@/types";
+import { getSupabase } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/supabase/AuthProvider";
+import type { Database } from "@/lib/supabase/types";
+
+type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 
 export default function JobsPage() {
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const { user } = useAuth();
+  const [jobs, setJobs] = useState<JobRow[]>([]);
   const [error, setError] = useState("");
 
   // Form state
@@ -18,9 +22,14 @@ export default function JobsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   async function loadJobs() {
+    if (!user) return;
     try {
-      const all = await jobRepository.getAll();
-      setJobs(all);
+      const { data, error: err } = await getSupabase()
+        .from("jobs")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (err) throw err;
+      setJobs(data ?? []);
     } catch (e) {
       console.error("Failed to load jobs", e);
       setError("Nepodařilo se načíst zakázky.");
@@ -29,7 +38,8 @@ export default function JobsPage() {
 
   useEffect(() => {
     loadJobs();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   function resetForm() {
     setName("");
@@ -39,17 +49,18 @@ export default function JobsPage() {
     setEditingId(null);
   }
 
-  function startEdit(job: Job) {
+  function startEdit(job: JobRow) {
     setEditingId(job.id);
     setName(job.name);
     setClient(job.client);
-    setDefaultHourlyRate(String(job.defaultHourlyRate));
+    setDefaultHourlyRate(String(job.default_hourly_rate));
     setActive(job.active);
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (!user) return;
 
     const rate = parseFloat(defaultHourlyRate);
     if (!name.trim()) {
@@ -63,25 +74,27 @@ export default function JobsPage() {
 
     try {
       if (editingId) {
-        const existing = await jobRepository.getById(editingId);
-        if (!existing) {
-          setError("Zakázka nenalezena.");
-          return;
-        }
-        await jobRepository.update({
-          ...existing,
-          name: name.trim(),
-          client: client.trim(),
-          defaultHourlyRate: rate,
-          active,
-        });
+        const { error: err } = await getSupabase()
+          .from("jobs")
+          .update({
+            name: name.trim(),
+            client: client.trim(),
+            default_hourly_rate: rate,
+            active,
+          })
+          .eq("id", editingId);
+        if (err) throw err;
       } else {
-        await jobRepository.create({
-          name: name.trim(),
-          client: client.trim(),
-          defaultHourlyRate: rate,
-          active,
-        });
+        const { error: err } = await getSupabase()
+          .from("jobs")
+          .insert({
+            user_id: user.id,
+            name: name.trim(),
+            client: client.trim(),
+            default_hourly_rate: rate,
+            active,
+          });
+        if (err) throw err;
       }
       resetForm();
       await loadJobs();
@@ -94,7 +107,11 @@ export default function JobsPage() {
   async function handleDelete(id: string) {
     setError("");
     try {
-      await jobRepository.remove(id);
+      const { error: err } = await getSupabase()
+        .from("jobs")
+        .delete()
+        .eq("id", id);
+      if (err) throw err;
       await loadJobs();
     } catch (e) {
       console.error("Failed to delete job", e);
@@ -177,7 +194,7 @@ export default function JobsPage() {
               <tr key={job.id}>
                 <td style={{ padding: 4 }}>{job.name}</td>
                 <td style={{ padding: 4 }}>{job.client}</td>
-                <td style={{ padding: 4, textAlign: "right" }}>{job.defaultHourlyRate.toFixed(2)} Kč</td>
+                <td style={{ padding: 4, textAlign: "right" }}>{Number(job.default_hourly_rate).toFixed(2)} Kč</td>
                 <td style={{ padding: 4, textAlign: "center" }}>{job.active ? "Ano" : "Ne"}</td>
                 <td style={{ padding: 4, display: "flex", gap: 4 }}>
                   <button onClick={() => startEdit(job)}>Upravit</button>
